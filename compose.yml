@@ -1,0 +1,28 @@
+version: '3.7'
+
+services:
+
+  idp_postgres:
+    hostname: "${DB_HOSTNAME}"
+    image: postgres:14.2-alpine
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    environment:
+      - "POSTGRES_PASSWORD=${DB_PASSWORD}"
+    # networks:
+    #   - rest_api_network
+    #   - db_management_network
+    restart: always
+
+  idp_rabbitmq:
+    hostname: "${MQ_HOSTNAME}"
+    image: rabbitmq:3.10-management
+    ports:
+      - "${MQ_PORT}:${MQ_PORT}"
+      - "${MQ_PORT_MANAGEMENT}:${MQ_PORT_MANAGEMENT}"
+    environment:
+      - "RABBITMQ_DEFAULT_USER=${MQ_USERNAME}"
+      - "RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}"
+
+
+
