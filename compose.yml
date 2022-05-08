@@ -13,6 +13,14 @@ services:
     #   - rest_api_network
     #   - db_management_network
     restart: always
+    healthcheck:
+      # test: ["CMD", "pg_isready -U postgres"]
+      test: pg_isready -U postgres
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
+###########################################################################
 
   idp_rabbitmq:
     hostname: "${MQ_HOSTNAME}"
@@ -23,6 +31,58 @@ services:
     environment:
       - "RABBITMQ_DEFAULT_USER=${MQ_USERNAME}"
       - "RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}"
+    restart: always
+    healthcheck:
+      # test: ["CMD", "curl", "-f", "http://idp_rabbitmq:15672"]
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 2s
+      retries: 15
 
+###########################################################################
 
+  idp_keyclock:
+    hostname: "${KEY_CLOCK_HOSTNAME}"
+    image: jboss/keycloak:16.1.1
+    ports:
+      - "${KEY_CLOCK_PORT_IN}:${KEY_CLOCK_PORT_OUT}"
+      - "${KEY_CLOCK_PORT_ADMIN}:${KEY_CLOCK_PORT_ADMIN}"
+    environment:
+      - "KEYCLOAK_USER=${KEY_CLOCK_USERNAME}"
+      - "KEYCLOAK_PASSWORD=${KEY_CLOCK_PASSWORD}"
+      - "DB_USER=postgres"
+      - "DB_PASSWORD=${DB_PASSWORD}"
+      - "DB_ADDR: oracle"
+      - "DB_PORT=${DB_PORT}"
+    depends_on:
+      idp_postgres:
+        condition: service_healthy
+    volumes:
+      - ./keyclock_config_volume/:/tmp
+    restart: always
+    healthcheck:
+      # test: ["CMD", "curl", "-f", "http://idp_keyclock:8180"]
+      # test: ["CMD", "curl", "-f", "http://localhost:8080/auth/"]
+      test: curl -f http://localhost:8080/auth/
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
+###########################################################################
+
+  idp_spring_boot_api:
+    image: 127.0.0.1:8888/idp_spring_boot_api
+    ports:
+      - "${SERVER_API_PORT}:${SERVER_API_PORT}"
+    depends_on:
+      idp_postgres:
+        condition: service_healthy
+      idp_rabbitmq:
+        condition: service_healthy
+      idp_keyclock:
+        condition: service_healthy
+    build:
+      context: ../proiect_refugiati_api
+      dockerfile: refugiati.Dockerfile
+    restart: always
 
