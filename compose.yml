@@ -47,13 +47,17 @@ services:
     ports:
       - "${KEY_CLOCK_PORT_IN}:${KEY_CLOCK_PORT_OUT}"
       - "${KEY_CLOCK_PORT_ADMIN}:${KEY_CLOCK_PORT_ADMIN}"
+      - "${KEY_CLOCK_PORT_AUX}:${KEY_CLOCK_PORT_AUX}"
     environment:
+      - "DB_VENDOR=POSTGRES"
+      - "DB_ADDR=${DB_HOSTNAME}"
+      - "DB_PORT=${DB_PORT}"
+      - "DB_DATABASE=${DB_NAME}"
+      - "DB_SCHEMA=${DB_SCHEMA}"
       - "KEYCLOAK_USER=${KEY_CLOCK_USERNAME}"
       - "KEYCLOAK_PASSWORD=${KEY_CLOCK_PASSWORD}"
-      - "DB_USER=postgres"
+      - "DB_USER=${DB_USERNAME}"
       - "DB_PASSWORD=${DB_PASSWORD}"
-      - "DB_ADDR: oracle"
-      - "DB_PORT=${DB_PORT}"
     depends_on:
       idp_postgres:
         condition: service_healthy
