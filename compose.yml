@@ -35,7 +35,6 @@ services:
       - "RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}"
     restart: always
     healthcheck:
-      # test: ["CMD", "curl", "-f", "http://idp_rabbitmq:15672"]
       test: rabbitmq-diagnostics -q ping
       interval: 5s
       timeout: 2s
@@ -43,7 +42,7 @@ services:
 
 ###########################################################################
 
-  idp_keyclock:
+  idp_keycloak:
     hostname: "${KEY_CLOCK_HOSTNAME}"
     image: jboss/keycloak:16.1.1
     ports:
@@ -56,21 +55,21 @@ services:
       - "DB_PORT=${DB_PORT}"
       - "DB_DATABASE=${DB_NAME}"
       - "DB_SCHEMA=${DB_SCHEMA}"
+      ###########################################
+      # In mod bizar se comenteaza cele doua variabile de mai jos, se ruleaza apoi se decomenteaza si miraculos merge...
       - "KEYCLOAK_USER=${KEY_CLOCK_USERNAME}"
       - "KEYCLOAK_PASSWORD=${KEY_CLOCK_PASSWORD}"
+      ###########################################
       - "DB_USER=${DB_USERNAME}"
       - "DB_PASSWORD=${DB_PASSWORD}"
-      - "KEYCLOAK_IMPORT=/opt/jboss/keycloak/imports/realm-export.json"
+      - "KEYCLOAK_IMPORT=/tmp/example-realm.json"
     depends_on:
       idp_postgres:
         condition: service_healthy
     volumes:
-      - ./hsperfdata_jboss/realm-export_final.json:/opt/jboss/keycloak/imports/realm-export.json
-      # - ./keyclock_config_volume/:/tmp
+      - ./keycloak_imports/realm-export_good.json:/tmp/example-realm.json
     restart: always
     healthcheck:
-      # test: ["CMD", "curl", "-f", "http://idp_keyclock:8180"]
-      # test: ["CMD", "curl", "-f", "http://localhost:8080/auth/"]
       test: curl -f http://localhost:8080/auth/
       interval: 5s
       timeout: 2s
@@ -88,7 +87,7 @@ services:
         condition: service_healthy
       idp_rabbitmq:
         condition: service_healthy
-      idp_keyclock:
+      idp_keycloak:
         condition: service_healthy
     build:
       context: ../proiect_refugiati_api
@@ -102,19 +101,19 @@ services:
 
 ###########################################################################
 
-  # idp_angular_front:
-  #   hostname: "${FRONT_HOSTNAME}"
-  #   image: 127.0.0.1:4200/idp_angular_front
-  #   ports:
-  #     - "${FRONT_PORT}:${FRONT_PORT}"
-  #     - "${FRONT_PORT_MANAGEMENT}:${FRONT_PORT_MANAGEMENT}"
-  #   build:
-  #     context: ../proiect_refugiati_front
-  #     dockerfile: refugiati.Dockerfile
-  #   restart: always
-  #   depends_on:
-  #     idp_spring_boot_api:
-  #       condition: service_healthy
-  #   # stdin_open: true
-  #   # environment:
-  #   #   - CHOKIDAR_USEPOLLING=true
+  idp_angular_front:
+    hostname: "${FRONT_HOSTNAME}"
+    image: 127.0.0.1:4200/idp_angular_front
+    ports:
+      - "${FRONT_PORT}:${FRONT_PORT}"
+      - "${FRONT_PORT_MANAGEMENT}:${FRONT_PORT_MANAGEMENT}"
+    build:
+      context: ../proiect_refugiati_front
+      dockerfile: refugiati.Dockerfile
+    restart: always
+    depends_on:
+      idp_spring_boot_api:
+        condition: service_healthy
+    # stdin_open: true
+    # environment:
+    #   - CHOKIDAR_USEPOLLING=true
