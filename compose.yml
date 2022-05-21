@@ -21,6 +21,10 @@ services:
       interval: 5s
       timeout: 2s
       retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
 
 ###########################################################################
 
@@ -39,6 +43,10 @@ services:
       interval: 5s
       timeout: 2s
       retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
 
 ###########################################################################
 
@@ -74,6 +82,10 @@ services:
       interval: 5s
       timeout: 2s
       retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
 
 ###########################################################################
 
@@ -98,6 +110,10 @@ services:
       interval: 5s
       timeout: 2s
       retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
 
 ###########################################################################
 
@@ -106,7 +122,6 @@ services:
     image: 127.0.0.1:4200/idp_angular_front
     ports:
       - "${FRONT_PORT}:${FRONT_PORT}"
-      - "${FRONT_PORT_MANAGEMENT}:${FRONT_PORT_MANAGEMENT}"
     build:
       context: ../proiect_refugiati_front
       dockerfile: refugiati.Dockerfile
@@ -114,6 +129,52 @@ services:
     depends_on:
       idp_spring_boot_api:
         condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
     # stdin_open: true
     # environment:
     #   - CHOKIDAR_USEPOLLING=true
+
+###########################################################################
+
+  idp_loki:
+    hostname: "${LOKI_HOSTNAME}"
+    image: grafana/loki:2.3.0
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT}:${LOKI_PORT}"
+    volumes:
+      - ./loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
+      - ./loki/data:/data/loki
+    command: -config.file=/etc/loki/loki-config.yaml
+
+###########################################################################
+
+  idp_grafana:
+    image: "grafana/grafana:8.5.2"
+    restart: unless-stopped
+    user: "0"
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT}:${GRAFANA_PORT}"
+    environment:
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+
+###########################################################################
+
+  idp_promtail:
+    container_name: promtail
+    image: grafana/promtail:2.3.0
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+    command: -config.file=/etc/promtail/promtail-config.yaml
+
