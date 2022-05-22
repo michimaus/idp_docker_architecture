@@ -4,20 +4,38 @@ _transform: true
 services:
 - name: idp_rabbitmq
   url: http://idp_rabbitmq:15672
-  # plugins:
-  # - name: key-auth
   routes:
-  - name: management
+  - name: management1
     paths:
     - /idp_rabbitmq_management
+
+- name: idp_keyclock
+  url: http://idp_keyclock:8080
+  routes:
+  - name: management2
+    paths:
+    - /idp_keyclock_management
+
+- name: idp_grafana
+  url: http://idp_grafana:3000
+  routes:
+  - name: management3
+    paths:
+    - /idp_grafana_management
+
+- name: idp_spring_boot_api
+  url: http://idp_spring_boot_api:8888
+  routes:
+  - name: management4
+    paths:
+    - /idp_spring_boot_api_management
+
+
 
 consumers:
 - username: some_user
   keyauth_credentials:
   - key: some_key
-
-
-
 
 
 

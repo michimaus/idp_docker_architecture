@@ -1,0 +1,273 @@
+version: '3.7'
+
+services:
+
+  idp_postgres:
+    hostname: "idp_postgres"
+    image: postgres:14.2-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - "POSTGRES_PASSWORD=password"
+    # depends_on:
+    #   idp_loki:
+    #     condition: service_healthy
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    # networks:
+    #   - rest_api_network
+    #   - db_management_network
+    restart: always
+    healthcheck:
+      # test: ["CMD", "pg_isready -U postgres"]
+      test: pg_isready -U postgres
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+
+  idp_rabbitmq:
+    hostname: "idp_rabbitmq"
+    image: rabbitmq:3.10-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - "RABBITMQ_DEFAULT_USER=rabbitmq"
+      - "RABBITMQ_DEFAULT_PASS=password"
+    # depends_on:
+    #   idp_loki:
+    #     condition: service_healthy
+    restart: always
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+
+  idp_keycloak:
+    hostname: "idp_keycloak"
+    image: jboss/keycloak:16.1.1
+    ports:
+      - "8080:8080"
+      - "9990:9990"
+      - "8443:8443"
+    environment:
+      - "DB_VENDOR=POSTGRES"
+      - "DB_ADDR=idp_postgres"
+      - "DB_PORT=5432"
+      - "DB_DATABASE=postgres"
+      - "DB_SCHEMA=public"
+      ###########################################
+      # In mod bizar se comenteaza cele doua variabile de mai jos, se ruleaza apoi se decomenteaza si miraculos merge...
+      - "KEYCLOAK_USER=admin_key"
+      - "KEYCLOAK_PASSWORD=admin_pass"
+      ###########################################
+      - "DB_USER=postgres"
+      - "DB_PASSWORD=password"
+      - "KEYCLOAK_IMPORT=/tmp/example-realm.json"
+    # depends_on:
+    #   idp_postgres:
+    #     condition: service_healthy
+    volumes:
+      - ./keycloak_imports/realm-export_good.json:/tmp/example-realm.json
+    restart: always
+    healthcheck:
+      test: curl -f http://localhost:8080/auth/
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+
+  idp_spring_boot_api:
+    hostname: "idp_spring_boot_api"
+    image: idp_spring_boot_api
+    ports:
+      - "8888:8888"
+    # depends_on:
+    #   idp_postgres:
+    #     condition: service_healthy
+    #   idp_rabbitmq:
+    #     condition: service_healthy
+    #   idp_keycloak:
+    #     condition: service_healthy
+    build:
+      context: ../proiect_refugiati_api
+      dockerfile: refugiati.Dockerfile
+    restart: always
+    healthcheck:
+      test: curl -f http://localhost:8888/check/2
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+
+  idp_angular_front:
+    hostname: "idp_angular_front"
+    image: idp_angular_front
+    ports:
+      - "4200:4200"
+    build:
+      context: ../proiect_refugiati_front
+      dockerfile: refugiati.Dockerfile
+    restart: always
+    # depends_on:
+    #   idp_spring_boot_api:
+    #     condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+    # stdin_open: true
+    # environment:
+    #   - CHOKIDAR_USEPOLLING=true
+
+###########################################################################
+
+  idp_loki:
+    hostname: "idp_loki"
+    image: grafana/loki:2.3.0
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
+      - ./loki/data:/data/loki
+    command: -config.file=/etc/loki/loki-config.yaml
+    healthcheck:
+      test: wget -q --tries=1 -O- http://127.0.0.1:3100/ready|grep -q "ready"
+      interval: 5s
+      timeout: 2s
+      retries: 15
+
+###########################################################################
+
+  idp_grafana:
+    image: "grafana/grafana:8.5.2"
+    restart: unless-stopped
+    user: "0"
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+
+###########################################################################
+
+  idp_promtail:
+    container_name: promtail
+    image: grafana/promtail:2.3.0
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+    command: -config.file=/etc/promtail/promtail-config.yaml
+
+###########################################################################
+
+  idp_mail_sender:
+    hostname: "idp_mail_sender"
+    image: idp_mail_sender
+    environment:
+      - PYTHONUNBUFFERED=1
+    # depends_on:
+    #   idp_rabbitmq:
+    #     condition: service_healthy
+    build:
+      context: ../proiect_refugiati_email
+      dockerfile: refugiati.Dockerfile
+    restart: always
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+          
+  portainer:
+    image: portainer/portainer-ce:2.11.1
+    # command: -H tcp://tasks.agent:9001 --tlsskipverify
+    ports:
+      - "9443:9443"
+      - "8000:8000"
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer_data:/data
+    # networks:
+      # - agent_network
+    # depends_on:
+    #   idp_loki:
+    #     condition: service_healthy
+    # deploy:
+    #   mode: replicated
+    #   replicas: 1
+    #   placement:
+    #     constraints: [node.role == manager]
+    restart: always
+    healthcheck:
+      test: curl -f localhost:9443
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+###########################################################################
+
+  kong:
+    image: kong:2.8.1
+    volumes:
+      - ./kong:/usr/local/kong/declarative #injectarea fisierului de configurare la calea specificata
+    environment:
+      KONG_DATABASE: 'off' #obligatoriu, daca se vrea modul DB-less
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml #trebuie specificat unde anume se va gasi fisierul de configurare
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+    # depends_on:
+    #   idp_rabbitmq:
+    #     condition: service_healthy
+    #   idp_loki:
+    #     condition: service_healthy
+    ports:
+      - 8008:8000 #expunerea porturilor
+      - 8543:8443
+    restart: always
+    # deploy:
+    #   placement:
+    #     constraints: [node.role == manager] #constrangerea de rulare doar pe master, pentru a nu exista conflict la nivel de volume
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"

@@ -133,7 +133,7 @@ services:
       dockerfile: refugiati.Dockerfile
     restart: always
     depends_on:
-      idp_spring_boot_api:
+      idp_keycloak:
         condition: service_healthy
     logging:
       driver: loki
@@ -212,7 +212,6 @@ services:
           
   portainer:
     image: portainer/portainer-ce:2.11.1
-    # command: -H tcp://tasks.agent:9001 --tlsskipverify
     ports:
       - "9443:9443"
       - "8000:8000"
@@ -220,8 +219,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./portainer_data:/data
-    # networks:
-      # - agent_network
     depends_on:
       idp_loki:
         condition: service_healthy
