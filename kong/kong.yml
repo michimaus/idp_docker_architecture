@@ -1,0 +1,62 @@
+_format_version: "2.1"
+_transform: true
+
+services:
+- name: idp_rabbitmq
+  url: http://idp_rabbitmq:15672
+  # plugins:
+  # - name: key-auth
+  routes:
+  - name: management
+    paths:
+    - /idp_rabbitmq_management
+
+consumers:
+- username: some_user
+  keyauth_credentials:
+  - key: some_key
+
+
+
+
+
+
+
+
+# _format_version: "2.1"
+
+# services:
+
+#   - name: idp_rabbitmq
+#     url: http://idp_rabbitmq:15672
+#     routes:
+#       - name: idp_rabbitmq_service
+#         paths:
+#           - /management
+
+#   # - name: books-service
+#   #   url: http://labkong_books-service/api
+#   #   routes:
+#   #     - name: books-service-route
+#   #       paths: 
+#   #         - /api/books
+          
+#   # - name: db-adminer
+#   #   url: http://labkong_adminer:8080
+#   #   routes:
+#   #     - name: adminer-service
+#   #       paths:
+#   #         - /adminer
+
+
+# consumers:
+#   - username: lab-student
+
+# plugins:
+#   - name: key-auth
+#     service: books-service
+
+# keyauth_credentials:
+#   - consumer: lab-student
+#     key: mobylab
+#     hide_credentials: true

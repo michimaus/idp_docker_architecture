@@ -9,6 +9,9 @@ services:
       - "${DB_PORT}:${DB_PORT}"
     environment:
       - "POSTGRES_PASSWORD=${DB_PASSWORD}"
+    depends_on:
+      idp_loki:
+        condition: service_healthy
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
     # networks:
@@ -37,6 +40,9 @@ services:
     environment:
       - "RABBITMQ_DEFAULT_USER=${MQ_USERNAME}"
       - "RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}"
+    depends_on:
+      idp_loki:
+        condition: service_healthy
     restart: always
     healthcheck:
       test: rabbitmq-diagnostics -q ping
@@ -91,7 +97,7 @@ services:
 
   idp_spring_boot_api:
     hostname: "${API_HOSTNAME}"
-    image: 127.0.0.1:8888/idp_spring_boot_api
+    image: idp_spring_boot_api
     ports:
       - "${SERVER_API_PORT}:${SERVER_API_PORT}"
     depends_on:
@@ -119,7 +125,7 @@ services:
 
   idp_angular_front:
     hostname: "${FRONT_HOSTNAME}"
-    image: 127.0.0.1:4200/idp_angular_front
+    image: idp_angular_front
     ports:
       - "${FRONT_PORT}:${FRONT_PORT}"
     build:
@@ -150,6 +156,11 @@ services:
       - ./loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
       - ./loki/data:/data/loki
     command: -config.file=/etc/loki/loki-config.yaml
+    healthcheck:
+      test: wget -q --tries=1 -O- http://127.0.0.1:3100/ready|grep -q "ready"
+      interval: 5s
+      timeout: 2s
+      retries: 15
 
 ###########################################################################
 
@@ -178,3 +189,85 @@ services:
       - ./promtail/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml
     command: -config.file=/etc/promtail/promtail-config.yaml
 
+###########################################################################
+
+  idp_mail_sender:
+    hostname: "${MAIL_HOSTNAME}"
+    image: idp_mail_sender
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      idp_rabbitmq:
+        condition: service_healthy
+    build:
+      context: ../proiect_refugiati_email
+      dockerfile: refugiati.Dockerfile
+    restart: always
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+###########################################################################
+          
+  portainer:
+    image: portainer/portainer-ce:2.11.1
+    # command: -H tcp://tasks.agent:9001 --tlsskipverify
+    ports:
+      - "9443:9443"
+      - "8000:8000"
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer_data:/data
+    # networks:
+      # - agent_network
+    depends_on:
+      idp_loki:
+        condition: service_healthy
+    # deploy:
+    #   mode: replicated
+    #   replicas: 1
+    #   placement:
+    #     constraints: [node.role == manager]
+    restart: always
+    healthcheck:
+      test: curl -f localhost:9443
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+###########################################################################
+
+  kong:
+    image: kong:2.8.1
+    volumes:
+      - ./kong:/usr/local/kong/declarative #injectarea fisierului de configurare la calea specificata
+    environment:
+      KONG_DATABASE: 'off' #obligatoriu, daca se vrea modul DB-less
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml #trebuie specificat unde anume se va gasi fisierul de configurare
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+    depends_on:
+      idp_rabbitmq:
+        condition: service_healthy
+      idp_loki:
+        condition: service_healthy
+    ports:
+      - 8008:8000 #expunerea porturilor
+      - 8543:8443
+    restart: always
+    # deploy:
+    #   placement:
+    #     constraints: [node.role == manager] #constrangerea de rulare doar pe master, pentru a nu exista conflict la nivel de volume
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"

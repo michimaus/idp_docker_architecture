@@ -1,0 +1,212 @@
+version: '3.7'
+
+services:
+
+#   idp_postgres:
+#     hostname: "${DB_HOSTNAME}"
+#     image: postgres:14.2-alpine
+#     ports:
+#       - "${DB_PORT}:${DB_PORT}"
+#     environment:
+#       - "POSTGRES_PASSWORD=${DB_PASSWORD}"
+#     volumes:
+#       - ./postgres-data:/var/lib/postgresql/data
+#     # networks:
+#     #   - rest_api_network
+#     #   - db_management_network
+#     restart: always
+#     healthcheck:
+#       # test: ["CMD", "pg_isready -U postgres"]
+#       test: pg_isready -U postgres
+#       interval: 5s
+#       timeout: 2s
+#       retries: 15
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+# ###########################################################################
+
+#   idp_rabbitmq:
+#     hostname: "${MQ_HOSTNAME}"
+#     image: rabbitmq:3.10-management
+#     ports:
+#       - "${MQ_PORT}:${MQ_PORT}"
+#       - "${MQ_PORT_MANAGEMENT}:${MQ_PORT_MANAGEMENT}"
+#     environment:
+#       - "RABBITMQ_DEFAULT_USER=${MQ_USERNAME}"
+#       - "RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD}"
+#     restart: always
+#     healthcheck:
+#       test: rabbitmq-diagnostics -q ping
+#       interval: 5s
+#       timeout: 2s
+#       retries: 15
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+# ###########################################################################
+
+#   idp_keycloak:
+#     hostname: "${KEY_CLOCK_HOSTNAME}"
+#     image: jboss/keycloak:16.1.1
+#     ports:
+#       - "${KEY_CLOCK_PORT_IN}:${KEY_CLOCK_PORT_OUT}"
+#       - "${KEY_CLOCK_PORT_ADMIN}:${KEY_CLOCK_PORT_ADMIN}"
+#       - "${KEY_CLOCK_PORT_AUX}:${KEY_CLOCK_PORT_AUX}"
+#     environment:
+#       - "DB_VENDOR=POSTGRES"
+#       - "DB_ADDR=${DB_HOSTNAME}"
+#       - "DB_PORT=${DB_PORT}"
+#       - "DB_DATABASE=${DB_NAME}"
+#       - "DB_SCHEMA=${DB_SCHEMA}"
+#       ###########################################
+#       # In mod bizar se comenteaza cele doua variabile de mai jos, se ruleaza apoi se decomenteaza si miraculos merge...
+#       - "KEYCLOAK_USER=${KEY_CLOCK_USERNAME}"
+#       - "KEYCLOAK_PASSWORD=${KEY_CLOCK_PASSWORD}"
+#       ###########################################
+#       - "DB_USER=${DB_USERNAME}"
+#       - "DB_PASSWORD=${DB_PASSWORD}"
+#       - "KEYCLOAK_IMPORT=/tmp/example-realm.json"
+#     depends_on:
+#       idp_postgres:
+#         condition: service_healthy
+#     volumes:
+#       - ./keycloak_imports/realm-export_good.json:/tmp/example-realm.json
+#     restart: always
+#     healthcheck:
+#       test: curl -f http://localhost:8080/auth/
+#       interval: 5s
+#       timeout: 2s
+#       retries: 15
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+# ###########################################################################
+
+#   idp_spring_boot_api:
+#     hostname: "${API_HOSTNAME}"
+#     image: idp_spring_boot_api
+#     ports:
+#       - "${SERVER_API_PORT}:${SERVER_API_PORT}"
+#     depends_on:
+#       idp_postgres:
+#         condition: service_healthy
+#       idp_rabbitmq:
+#         condition: service_healthy
+#       idp_keycloak:
+#         condition: service_healthy
+#     build:
+#       context: ../proiect_refugiati_api
+#       dockerfile: refugiati.Dockerfile
+#     restart: always
+#     healthcheck:
+#       test: curl -f http://localhost:8888/check/2
+#       interval: 5s
+#       timeout: 2s
+#       retries: 15
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+# ###########################################################################
+
+#   idp_angular_front:
+#     hostname: "${FRONT_HOSTNAME}"
+#     image: idp_angular_front
+#     ports:
+#       - "${FRONT_PORT}:${FRONT_PORT}"
+#     build:
+#       context: ../proiect_refugiati_front
+#       dockerfile: refugiati.Dockerfile
+#     restart: always
+#     depends_on:
+#       idp_spring_boot_api:
+#         condition: service_healthy
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+#     # stdin_open: true
+#     # environment:
+#     #   - CHOKIDAR_USEPOLLING=true
+
+# ###########################################################################
+
+#   idp_loki:
+#     hostname: "${LOKI_HOSTNAME}"
+#     image: grafana/loki:2.3.0
+#     restart: unless-stopped
+#     ports:
+#       - "${LOKI_PORT}:${LOKI_PORT}"
+#     volumes:
+#       - ./loki/config/loki-config.yaml:/etc/loki/loki-config.yaml
+#       - ./loki/data:/data/loki
+#     command: -config.file=/etc/loki/loki-config.yaml
+
+# ###########################################################################
+
+#   idp_grafana:
+#     image: "grafana/grafana:8.5.2"
+#     restart: unless-stopped
+#     user: "0"
+#     volumes:
+#       - ./grafana/data:/var/lib/grafana
+#     ports:
+#       - "${GRAFANA_PORT}:${GRAFANA_PORT}"
+#     environment:
+#       - GF_AUTH_DISABLE_LOGIN_FORM=true
+#       - GF_AUTH_ANONYMOUS_ENABLED=true
+#       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+#       - GF_SECURITY_ALLOW_EMBEDDING=true
+
+# ###########################################################################
+
+#   idp_promtail:
+#     container_name: promtail
+#     image: grafana/promtail:2.3.0
+#     restart: unless-stopped
+#     volumes:
+#       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+#       - ./promtail/config/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+#     command: -config.file=/etc/promtail/promtail-config.yaml
+
+# ###########################################################################
+
+#   idp_mail_sender:
+#     hostname: "${MAIL_HOSTNAME}"
+#     image: idp_mail_sender
+#     depends_on:
+#       idp_rabbitmq:
+#         condition: service_healthy
+#     build:
+#       context: ../proiect_refugiati_email
+#       dockerfile: refugiati.Dockerfile
+#     restart: always
+#     # healthcheck:
+#     #   test: curl -f http://localhost:8888/check/2
+#     #   interval: 5s
+#     #   timeout: 2s
+#     #   retries: 15
+#     logging:
+#       driver: loki
+#       options:
+#         loki-url: "http://localhost:${LOKI_PORT}/loki/api/v1/push"
+
+  idp_mail_sender:
+    hostname: "${MAIL_HOSTNAME}"
+    image: idp_mail_sender
+    environment:
+      - PYTHONUNBUFFERED=1
+    build:
+      context: ../proiect_refugiati_email
+      dockerfile: refugiati.Dockerfile
+    restart: always
+
